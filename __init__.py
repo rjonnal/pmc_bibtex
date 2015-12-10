@@ -386,3 +386,8 @@ class ArticleList:
             xml = self.fetch(id_number)
             self.article_list = self.article_list + self.xml_to_article_list(xml)
     
+    def to_bibtex(self,fn):
+        fid = open(fn,'wb')
+        for art in self.article_list:
+            fid.write(art.to_bibtex()+'\n\n')
+        fid.close()
