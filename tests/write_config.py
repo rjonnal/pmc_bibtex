@@ -13,10 +13,10 @@ config.add_section('PubMed')
 config.set('PubMed','user_email','me@myuniversity.edu')
 config.set('PubMed','user_tool','biopython')
 config.add_section('Paths')
-config.set('Paths', 'title_key_file', '/home/rjonnal/data/Dropbox/Private/bib/longtitles.bib')
+config.set('Paths', 'title_key_file', './bib/longtitles.bib')
 config.set('Paths', 'cache_root_directory', '/home/rjonnal/code/pmc_bibtex/.cache/')
 config.add_section('Constants')
-config.set('Constants', 'unknown_affiliaton','unknown affiliation')
+config.set('Constants', 'unknown_affiliation','unknown affiliation')
 
 
 

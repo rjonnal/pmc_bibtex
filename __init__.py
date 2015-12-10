@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 config = ConfigParser.RawConfigParser()
-config.read('pmc_bibtex.cfg')
+config.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'pmc_bibtex.cfg'))
 
 def timestamp():
     return datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -19,36 +19,30 @@ def ascii_encode(s):
 def MySoup(argin):
     return Soup(argin,"html.parser")
 
-journal_dict = {}
 
-try:
-    title_key_file = config.get('Paths','title_key_file')
-    fid = open(title_key_file,'rb')
-    temp = fid.read()
-    fid.close()
-    temp = temp.strip()
-    temp = temp.split('@string')
-    for item in temp:
-        item = item.strip()
-        if len(item)>5:
-            if item[0]=='{' and item[-1]=='}':
-                pair = item[1:-1]
-                value,key = pair.split('=')
-                key = key.replace('"','')
-                journal_dict[key.lower()] = value
-except:
-    pass
+class JournalDictionary:
+    def __init__(self):
+        self.journal_dict = {}
+        try:
+            title_key_file = config.get('Paths','title_key_file')
+            fid = open(title_key_file,'rb')
+            temp = fid.read()
+            fid.close()
+            temp = temp.strip()
+            temp = temp.split('@string')
+            for item in temp:
+                item = item.strip()
+                if len(item)>5:
+                    if item[0]=='{' and item[-1]=='}':
+                        pair = item[1:-1]
+                        value,key = pair.split('=')
+                        key = key.replace('"','')
+                        self.journal_dict[key.lower()] = value
+        except:
+            pass
 
-try:
-    cache_root_directory = config.get('Paths', 'cache_root_directory')
-except:
-    cache_root_directory = './.cache'
-
-try:
-    logger.info('Creating %s.'%cache_root_directory)
-    os.makedirs(cache_root_directory)
-except OSError as e:
-    logger.info('%s exists.'%cache_root_directory)
+    def get(self,key):
+        return self.journal_dict[key]
 
 class Author:
     def __init__(self,surname,given_name,aff_tag=''):
@@ -67,6 +61,9 @@ class Author:
 
 
 class Article:
+
+    journal_dictionary = JournalDictionary()
+    
     def __init__(self,title,author_list,journal,date_dict,keyword_list,abstract,id_dict,pages,volume,issue):
         self.title = title
         self.author_list = author_list
@@ -116,7 +113,7 @@ class Article:
         authors = authors.strip()
         journal = self.journal
         try:
-            journal = journal_dict[journal.lower()]
+            journal = self.journal_dictionary.get(journal.lower())
         except Exception as e:
             pass
         strings = (self.tag,self.title,journal,authors,self.pages,self.volume,self.issue,self.get_year())
@@ -172,8 +169,24 @@ class Article:
 class ArticleList:
 
     def __init__(self):
+        try:
+            self.cache_root_directory = config.get('Paths', 'cache_root_directory')
+        except Exception as e:
+            self.cache_root_directory = './.cache'
+
+        try:
+            logger.info('Creating %s.'%self.cache_root_directory)
+            os.makedirs(self.cache_root_directory)
+        except OSError as e:
+            logger.info('%s exists.'%self.cache_root_directory)
+
+        self.xml_cache = os.path.join(self.cache_root_directory,'xml')
+        if not os.path.exists(self.xml_cache):
+            os.makedirs(self.xml_cache)
+
+        self.article_list = []
     
-    def xml2article(xml):
+    def xml_to_article_list(self,xml):
         out = []
         soup = MySoup(xml)
         articles = soup.findAll('article')
@@ -262,7 +275,7 @@ class ArticleList:
             # can be used to look up their affiliations
             affiliation_list = article.findAll('aff')
             affiliation_dictionary = {}
-            affiliation_dictionary[''] = UNKNOWN_AFFILIATION
+            affiliation_dictionary[''] = config.get('Constants','unknown_affiliation')
             for affiliation in affiliation_list:
                 if len(affiliation.contents[0])>5:
                     affiliation_contents = affiliation.contents[0]
@@ -270,7 +283,8 @@ class ArticleList:
                     try:
                         affiliation_contents = affiliation.findAll('addr-line')[0].contents[0]
                     except Exception as e:
-                        affiliation_contents = UNKNOWN_AFFILIATION
+                        affiliation_contents = config.get('Constants','unknown_affiliation')
+
                 aff_tag_dict = dict(affiliation.attrs)
                 try:
                     aff_tag = aff_tag_dict['id']
@@ -283,7 +297,7 @@ class ArticleList:
                 try:
                     author.affiliation = affiliation_dictionary[author.aff_tag]
                 except Exception:
-                    author.affiliation = UNKNOWN_AFFILIATION
+                    author.affiliation = config.get('Constants','unknown_affiliation')
             # now let's get the abstract and keywords:
             abstract_list = article.findAll('abstract')
             candidates = []
@@ -301,7 +315,7 @@ class ArticleList:
             out.append(art)
         return out
 
-    def term_to_directory(term):
+    def term_to_directory(self,term):
         out = term
         replacements = [
             [')','_closeparen_'],
@@ -314,14 +328,14 @@ class ArticleList:
 
 
     def search(self,term,retmax=1000):
-        """Searches Pub Med Central for TERM and returns a list, not longer than RETMAX, of PMCID numbers."""
-        term_cache = os.path.join(cache_root_directory,term_to_directory(term))
+        """Searches Pub Med Central for TERM and returns a list, not longer than RETMAX, 
+        of PMCID numbers. Returns a list of PMC ID numbers, as strings."""
+        self.term_cache = os.path.join(self.cache_root_directory,self.term_to_directory(term))
         try:
-            os.makedirs(term_cache)
+            os.makedirs(self.term_cache)
         except:
             pass
-        idfn = os.path.join(term_cache,'idlist.txt')
-        print idfn
+        idfn = os.path.join(self.term_cache,'idlist.txt')
         try:
             ids_fid = open(idfn,'rb')
             ids = ids_fid.read()
@@ -337,70 +351,38 @@ class ArticleList:
             ids_fid.write(ids)
             ids_fid.close()
 
-        idlist = ids.split('<IdList>')[1].split('</IdList>')[0].split('\n')[1:-1]
+        temp_soup = MySoup(ids)
+        id_soups = temp_soup.findAll('id')
+        idlist = []
+        for id_soup in id_soups:
+            idlist.append(id_soup.contents[0])
         return idlist
 
 
-    def fetch(id):
-        term_cache = os.path.join(cache_root_directory,term_to_directory(term))
-        if not os.path.exists(term_cache):
-            os.makedirs(term_cache)
-
-        fn = os.path.join(term_cache,'%s.xml'%id)
+    def fetch(self,id):
+        fn = os.path.join(self.xml_cache,'%s.xml'%id)
         try:
             fid = open(fn,'r')
             xml = fid.read()
             fid.close()
-            print 'fetching from cache'
+            logger.info('Fetching %s from cache.'%id)
         except Exception as e:
+            Entrez.email = config.get('PubMed','user_email')
+            Entrez.tool = config.get('PubMed','user_tool')
             handle = Entrez.efetch(db='pmc',id=id)
             xml = handle.read()
             handle.close()
             fid = open(fn,'w')
             fid.write(xml)
             fid.close()
-            print 'fetching from PMC'
+            logger.info('Fetching %s from PMC.'%id)
         return xml
 
 
-bibtex_fid = open('pmc_aooct.bib','wb')
-
-with open('aooct_citations.csv','wb') as f:
-    writer = csv.writer(f)
-    for id in idlist:
-        id = id[4:-5]
-        print id
-        xml = fetch(id)
-        art = xml2article(xml)
-        match = art.conjoint_search(['adaptive optics','optical coherence tomography'])
-        include_fn = os.path.join('.','xml','%s.xml.include'%id)
-        
-        if not match:
-            include_fid = open(include_fn,'wb')
-            include_fid.write('0')
-            include_fid.close()
-            print 'No match.'
-            continue
-        try:
-            include_fid = open(include_fn,'rb')
-            include = bool(include_fid.read())
-            include_fid.close()
-            if include:
-                art.to_csv(writer)
-                bibtex_fid.write(art.to_bibtex()+'\n\n')
-        except Exception:
-            print
-            print art.to_list()
-            print art.abstract.replace('\n',' ')
-            ans = raw_input('Include? ')
-            include = ans.lower()=='y'
-            include_fid = open(include_fn,'wb')
-            if include:
-                include_fid.write('1')
-                art.to_csv(writer)
-                bibtex_fid.write(art.to_bibtex()+'\n\n')
-            else:
-                include_fid.write('0')
-            include_fid.close()
-
-bibtex_fid.close()
+    def build(self,search_query):
+        idlist = self.search(search_query)
+        for idx,id_number in enumerate(idlist):
+            logger.info('Fetching article %d of %d.'%(idx+1,len(idlist)))
+            xml = self.fetch(id_number)
+            self.article_list = self.article_list + self.xml_to_article_list(xml)
+    
