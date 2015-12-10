@@ -330,7 +330,7 @@ class ArticleList:
         return out
 
 
-    def search(self,term,retmax=1000):
+    def search(self,term,retmax=1000,use_cache=True):
         """Searches Pub Med Central for TERM and returns a list, not longer than RETMAX, 
         of PMCID numbers. Returns a list of PMC ID numbers, as strings."""
         self.term_cache = os.path.join(self.cache_root_directory,self.term_to_directory(term))
@@ -339,6 +339,8 @@ class ArticleList:
         except:
             pass
         idfn = os.path.join(self.term_cache,'idlist.txt')
+        if not use_cache:
+            os.remove(idfn)
         try:
             ids_fid = open(idfn,'rb')
             ids = ids_fid.read()
@@ -346,7 +348,6 @@ class ArticleList:
         except Exception:
             Entrez.email = config.get('PubMed','user_email')
             Entrez.tool = config.get('PubMed','user_tool')
-            retmax = 1000
             handle = Entrez.esearch(db='pmc',term=term,retmax=retmax)
             ids = handle.read()
             handle.close()
@@ -382,8 +383,8 @@ class ArticleList:
         return xml
 
 
-    def build(self,search_query):
-        idlist = self.search(search_query)
+    def build(self,search_query,retmax=1000,use_cache=True):
+        idlist = self.search(search_query,retmax=retmax,use_cache=use_cache)
         for idx,id_number in enumerate(idlist):
             logger.info('Fetching article %d of %d.'%(idx+1,len(idlist)))
             xml = self.fetch(id_number)
