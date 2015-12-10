@@ -271,6 +271,9 @@ class ArticleList:
                 # affiliation text, which we'll fill in later:
                 a_author_list.append(author)
 
+            if not len(a_author_list):
+                a_author_list = [Author('author','unknown')]
+                
             # now make a dictionary in which the authors' affiliation keys
             # can be used to look up their affiliations
             affiliation_list = article.findAll('aff')
