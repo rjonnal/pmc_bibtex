@@ -168,197 +168,199 @@ class Article:
                 
         return '%d'%earliest
 
-def xml2article(xml):
-    out = []
-    soup = MySoup(xml)
-    articles = soup.findAll('article')
-    for article in articles:
-        # determine the article title
-        title_list = article.findAll('article-title')
-        a_title = title_list[0].get_text()
 
-        # determine the journal
-        journal_list = article.findAll('journal-title')
-        a_journal = journal_list[0].get_text()
+class ArticleList:
 
-        # determine the DOI, pmc, pmid
-        id_dict = {}
-        articleid_list = article.findAll('article-id')
-        for articleid in articleid_list:
-            key = articleid.attrs['pub-id-type']
-            value = articleid.get_text()
-            id_dict[key] = value
+    def __init__(self):
+    
+    def xml2article(xml):
+        out = []
+        soup = MySoup(xml)
+        articles = soup.findAll('article')
+        for article in articles:
+            # determine the article title
+            title_list = article.findAll('article-title')
+            a_title = title_list[0].get_text()
 
-        # determine the date of publication
-        # there are numerous dates; keep track of their attributes:
-        a_date_dict = {}
-        pubdate_list = article.findAll('pub-date')
-        for pubdate in pubdate_list:
-            key = pubdate.attrs['pub-type']
-            try: year = int(pubdate.find('year').get_text())
-            except Exception: year = 0
-            try: month = int(pubdate.find('month').get_text())
-            except Exception: month = 1
-            try: day = int(pubdate.find('day').get_text())
-            except Exception: day = 1
-            a_date_dict[key] = datetime.date(year,month,day)
+            # determine the journal
+            journal_list = article.findAll('journal-title')
+            a_journal = journal_list[0].get_text()
+
+            # determine the DOI, pmc, pmid
+            id_dict = {}
+            articleid_list = article.findAll('article-id')
+            for articleid in articleid_list:
+                key = articleid.attrs['pub-id-type']
+                value = articleid.get_text()
+                id_dict[key] = value
+
+            # determine the date of publication
+            # there are numerous dates; keep track of their attributes:
+            a_date_dict = {}
+            pubdate_list = article.findAll('pub-date')
+            for pubdate in pubdate_list:
+                key = pubdate.attrs['pub-type']
+                try: year = int(pubdate.find('year').get_text())
+                except Exception: year = 0
+                try: month = int(pubdate.find('month').get_text())
+                except Exception: month = 1
+                try: day = int(pubdate.find('day').get_text())
+                except Exception: day = 1
+                a_date_dict[key] = datetime.date(year,month,day)
 
 
-        # determine the pages
-        try:
-            fpage = article.findAll('fpage')[0].get_text()
-            lpage = article.findAll('lpage')[0].get_text()
-            pages = '%s--%s'%(fpage,lpage)
-        except Exception:
-            pages = ''
-            
-        # determine the volume and issue
-        try:
-            volume = article.findAll('volume')[0].get_text()
-        except Exception:
-            volume = '-1'
-        try:
-            issue = article.findAll('issue')[0].get_text()
-        except Exception:
-            issue = '-1'
-            
-        # determine the authors, contained in <contrib> block
-        contrib_list = article.findAll('contrib')
-        a_author_list = []
-        for contrib in contrib_list:
-            name_list = contrib.findAll('name')
-            xref_list = contrib.findAll('xref')
-
-            # determine this author's first and last names
-            for name in name_list:
-                s_soup = name.findAll('surname')
-                g_soup = name.findAll('given-names')
-                surname = s_soup[0].contents[0]
-                given_name = g_soup[0].contents[0]
-
-            # determine the XML code (contained in the 'rid' attribute
-            # of the <xref> tag) that's a key for affiliation lookup
-            aff_tag = ''
-            for xref in xref_list:
-                xref_attrs = xref.attrs
-                if xref_attrs['ref-type']=='aff':
-                    try:
-                        aff_tag = xref_attrs['rid']
-                    except Exception as e:
-                        aff_tag = ''
-                
-            author = Author(surname,given_name,aff_tag)
-            # append the author to the author list, even though we
-            # only have the author's affiliation key, not the actual
-            # affiliation text, which we'll fill in later:
-            a_author_list.append(author)
-            
-        # now make a dictionary in which the authors' affiliation keys
-        # can be used to look up their affiliations
-        affiliation_list = article.findAll('aff')
-        affiliation_dictionary = {}
-        affiliation_dictionary[''] = UNKNOWN_AFFILIATION
-        for affiliation in affiliation_list:
-            if len(affiliation.contents[0])>5:
-                affiliation_contents = affiliation.contents[0]
-            else:
-                try:
-                    affiliation_contents = affiliation.findAll('addr-line')[0].contents[0]
-                except Exception as e:
-                    affiliation_contents = UNKNOWN_AFFILIATION
-            aff_tag_dict = dict(affiliation.attrs)
+            # determine the pages
             try:
-                aff_tag = aff_tag_dict['id']
+                fpage = article.findAll('fpage')[0].get_text()
+                lpage = article.findAll('lpage')[0].get_text()
+                pages = '%s--%s'%(fpage,lpage)
             except Exception:
+                pages = ''
+
+            # determine the volume and issue
+            try:
+                volume = article.findAll('volume')[0].get_text()
+            except Exception:
+                volume = '-1'
+            try:
+                issue = article.findAll('issue')[0].get_text()
+            except Exception:
+                issue = '-1'
+
+            # determine the authors, contained in <contrib> block
+            contrib_list = article.findAll('contrib')
+            a_author_list = []
+            for contrib in contrib_list:
+                name_list = contrib.findAll('name')
+                xref_list = contrib.findAll('xref')
+
+                # determine this author's first and last names
+                for name in name_list:
+                    s_soup = name.findAll('surname')
+                    g_soup = name.findAll('given-names')
+                    surname = s_soup[0].contents[0]
+                    given_name = g_soup[0].contents[0]
+
+                # determine the XML code (contained in the 'rid' attribute
+                # of the <xref> tag) that's a key for affiliation lookup
                 aff_tag = ''
-            affiliation_dictionary[aff_tag] = affiliation_contents
+                for xref in xref_list:
+                    xref_attrs = xref.attrs
+                    if xref_attrs['ref-type']=='aff':
+                        try:
+                            aff_tag = xref_attrs['rid']
+                        except Exception as e:
+                            aff_tag = ''
 
-        # now we can set the affiliation text for each author, using our dictionary:
-        for author in a_author_list:
-            try:
-                author.affiliation = affiliation_dictionary[author.aff_tag]
-            except Exception:
-                author.affiliation = UNKNOWN_AFFILIATION
-        # now let's get the abstract and keywords:
-        abstract_list = article.findAll('abstract')
-        candidates = []
-        a_abstract = ''
-        for abstract in abstract_list:
-            a_abstract = a_abstract + '\n' + abstract.get_text()
+                author = Author(surname,given_name,aff_tag)
+                # append the author to the author list, even though we
+                # only have the author's affiliation key, not the actual
+                # affiliation text, which we'll fill in later:
+                a_author_list.append(author)
 
-        keyword_list = article.findAll('kwd')
-        a_keyword_list = []
-        for kw in keyword_list:
-            # make all keywords lower case, just because
-            a_keyword_list.append(kw.get_text().lower())
+            # now make a dictionary in which the authors' affiliation keys
+            # can be used to look up their affiliations
+            affiliation_list = article.findAll('aff')
+            affiliation_dictionary = {}
+            affiliation_dictionary[''] = UNKNOWN_AFFILIATION
+            for affiliation in affiliation_list:
+                if len(affiliation.contents[0])>5:
+                    affiliation_contents = affiliation.contents[0]
+                else:
+                    try:
+                        affiliation_contents = affiliation.findAll('addr-line')[0].contents[0]
+                    except Exception as e:
+                        affiliation_contents = UNKNOWN_AFFILIATION
+                aff_tag_dict = dict(affiliation.attrs)
+                try:
+                    aff_tag = aff_tag_dict['id']
+                except Exception:
+                    aff_tag = ''
+                affiliation_dictionary[aff_tag] = affiliation_contents
 
-        art = Article(a_title,a_author_list,a_journal,a_date_dict,a_keyword_list,a_abstract,id_dict,pages,volume,issue)
-        out.append(art)
-    return out
+            # now we can set the affiliation text for each author, using our dictionary:
+            for author in a_author_list:
+                try:
+                    author.affiliation = affiliation_dictionary[author.aff_tag]
+                except Exception:
+                    author.affiliation = UNKNOWN_AFFILIATION
+            # now let's get the abstract and keywords:
+            abstract_list = article.findAll('abstract')
+            candidates = []
+            a_abstract = ''
+            for abstract in abstract_list:
+                a_abstract = a_abstract + '\n' + abstract.get_text()
 
-def term_to_directory(term):
-    out = term
-    replacements = [
-        ['(','_closeparen_'],
-        [')','_openparen_'],
-        ['+','_plus_']
-        ]
-    for r in replacements:
-        out = out.replace(r[0],r[1])
-    return out
-        
+            keyword_list = article.findAll('kwd')
+            a_keyword_list = []
+            for kw in keyword_list:
+                # make all keywords lower case, just because
+                a_keyword_list.append(kw.get_text().lower())
 
-def search(term,retmax=1000):
-    """Searches Pub Med Central for TERM and returns a list, not longer than RETMAX, of PMCID numbers."""
-    term_cache = os.path.join(cache_root_directory,term_to_directory(term))
-    try:
-        os.makedirs(term_cache)
-    except:
-        pass
-    idfn = os.path.join(term_cache,'idlist.txt')
-    print idfn
-    try:
-        ids_fid = open(idfn,'rb')
-        ids = ids_fid.read()
-        ids_fid.close()
-    except Exception:
-        Entrez.email = config.get('PubMed','user_email')
-        Entrez.tool = config.get('PubMed','user_tool')
-        retmax = 1000
-        handle = Entrez.esearch(db='pmc',term=term,retmax=retmax)
-        ids = handle.read()
-        handle.close()
-        ids_fid = open(idfn,'wb')
-        ids_fid.write(ids)
-        ids_fid.close()
+            art = Article(a_title,a_author_list,a_journal,a_date_dict,a_keyword_list,a_abstract,id_dict,pages,volume,issue)
+            out.append(art)
+        return out
 
-    idlist = ids.split('<IdList>')[1].split('</IdList>')[0].split('\n')[1:-1]
-    return idlist
-
-search(term='(adaptive+optics)+AND+(optical+coherence+tomography)',retmax=10)
-sys.exit()
+    def term_to_directory(term):
+        out = term
+        replacements = [
+            [')','_closeparen_'],
+            ['(','_openparen_'],
+            ['+','_plus_']
+            ]
+        for r in replacements:
+            out = out.replace(r[0],r[1])
+        return out
 
 
-def fetch(id):
-    term_cache = os.path.join(cache_root_directory,term_to_directory(term))
-    if not os.path.exists(term_cache):
-        os.makedirs(term_cache)
-        
-    fn = os.path.join(term_cache,'%s.xml'%id)
-    try:
-        fid = open(fn,'r')
-        xml = fid.read()
-        fid.close()
-        print 'fetching from cache'
-    except Exception as e:
-        handle = Entrez.efetch(db='pmc',id=id)
-        xml = handle.read()
-        handle.close()
-        fid = open(fn,'w')
-        fid.write(xml)
-        fid.close()
-        print 'fetching from PMC'
-    return xml
+    def search(self,term,retmax=1000):
+        """Searches Pub Med Central for TERM and returns a list, not longer than RETMAX, of PMCID numbers."""
+        term_cache = os.path.join(cache_root_directory,term_to_directory(term))
+        try:
+            os.makedirs(term_cache)
+        except:
+            pass
+        idfn = os.path.join(term_cache,'idlist.txt')
+        print idfn
+        try:
+            ids_fid = open(idfn,'rb')
+            ids = ids_fid.read()
+            ids_fid.close()
+        except Exception:
+            Entrez.email = config.get('PubMed','user_email')
+            Entrez.tool = config.get('PubMed','user_tool')
+            retmax = 1000
+            handle = Entrez.esearch(db='pmc',term=term,retmax=retmax)
+            ids = handle.read()
+            handle.close()
+            ids_fid = open(idfn,'wb')
+            ids_fid.write(ids)
+            ids_fid.close()
+
+        idlist = ids.split('<IdList>')[1].split('</IdList>')[0].split('\n')[1:-1]
+        return idlist
+
+
+    def fetch(id):
+        term_cache = os.path.join(cache_root_directory,term_to_directory(term))
+        if not os.path.exists(term_cache):
+            os.makedirs(term_cache)
+
+        fn = os.path.join(term_cache,'%s.xml'%id)
+        try:
+            fid = open(fn,'r')
+            xml = fid.read()
+            fid.close()
+            print 'fetching from cache'
+        except Exception as e:
+            handle = Entrez.efetch(db='pmc',id=id)
+            xml = handle.read()
+            handle.close()
+            fid = open(fn,'w')
+            fid.write(xml)
+            fid.close()
+            print 'fetching from PMC'
+        return xml
 
 
 bibtex_fid = open('pmc_aooct.bib','wb')
