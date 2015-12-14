@@ -4,6 +4,7 @@ import sys,os,csv
 import datetime
 import ConfigParser
 import logging
+from time import sleep
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -363,7 +364,7 @@ class ArticleList:
         return idlist
 
 
-    def fetch(self,id):
+    def fetch(self,id,delay=1):
         fn = os.path.join(self.xml_cache,'%s.xml'%id)
         try:
             fid = open(fn,'r')
@@ -373,6 +374,7 @@ class ArticleList:
         except Exception as e:
             Entrez.email = config.get('PubMed','user_email')
             Entrez.tool = config.get('PubMed','user_tool')
+            sleep(1)
             handle = Entrez.efetch(db='pmc',id=id)
             xml = handle.read()
             handle.close()
